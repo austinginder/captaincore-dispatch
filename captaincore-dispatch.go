@@ -242,7 +242,10 @@ func handleRequests() {
 		// Generate cert.pem and key.pem for https://localhost
 		generateCert()
 
+		// Launch HTTPS server
+		fmt.Println("Starting server https://" + config.Host + ":" + config.Port)
 		log.Fatal(http.ListenAndServeTLS(":"+config.Port, "cert.pem", "key.pem", handlers.LoggingHandler(os.Stdout, router)))
+
 	}
 	if config.SSLMode == "production" {
 
@@ -279,30 +282,33 @@ func handleRequests() {
 		httpsSrv.Addr = config.Host + ":443"
 		httpsSrv.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate}
 
-		// Launch HTTPS server
-		go func() {
-			log.Fatal(httpsSrv.ListenAndServeTLS("", ""))
-		}()
+		// allow autocert handle Let's Encrypt auth callbacks over HTTP.
+		if m != nil {
+			// https://github.com/golang/go/issues/21890
+			httpSrv.Handler = m.HTTPHandler(httpSrv.Handler)
+		}
+
+		// Spin up web server on port 80 to listen for autocert HTTP challenge
+		httpSrv = makeHTTPServer()
+
+		httpSrv.Addr = ":80"
 
 		// Launch HTTP server
 		go func() {
 
-			// Spin up web server on port 80 to listen for autocert HTTP challenge
-			httpSrv = makeHTTPServer()
+			fmt.Println("Starting server http://localhost")
 
-			// allow autocert handle Let's Encrypt auth callbacks over HTTP.
-			if m != nil {
-				// https://github.com/golang/go/issues/21890
-				httpSrv.Handler = m.HTTPHandler(httpSrv.Handler)
-			}
-
-			httpSrv.Addr = ":80"
 			err := httpSrv.ListenAndServe()
 			if err != nil {
 				log.Fatalf("httpSrv.ListenAndServe() failed with %s", err)
 			}
 
 		}()
+
+		// Launch HTTPS server
+
+		fmt.Println("Starting server https://" + config.Host + ":" + config.Port)
+		log.Fatal(httpsSrv.ListenAndServeTLS("", ""))
 
 	}
 
@@ -373,8 +379,6 @@ func serverCmd() *cobra.Command {
 	return &cobra.Command{
 		Use: "server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-
-			fmt.Println("Starting server https://" + config.Host + ":" + config.Port)
 
 			// Handle Subsequent requests
 			handleRequests()
