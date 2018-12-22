@@ -4,7 +4,7 @@ CaptainCore Dispatch Server
 
 </h1>
 
-CaptainCore Dispatch is a Golang web server part of the [CaptainCore](https://captaincore.io) toolkit (a powerful toolkit for managing WordPress sites via SSH & WP-CLI). CaptainCore Dispatch sites between [CaptainCore GUI (WordPress plugin)](https://github.com/captaincore/captaincore-gui) and[CaptainCore CLI](https://github.com/captaincore/captaincore-cli).
+CaptainCore Dispatch is a Golang web server part of the [CaptainCore](https://captaincore.io) toolkit (a powerful toolkit for managing WordPress sites via SSH & WP-CLI). CaptainCore Dispatch sites between [CaptainCore GUI (WordPress plugin)](https://github.com/captaincore/captaincore-gui) and [CaptainCore CLI](https://github.com/captaincore/captaincore-cli).
 
 [![emoji-log](https://cdn.rawgit.com/ahmadawais/stuff/ca97874/emoji-log/flat.svg)](https://github.com/ahmadawais/Emoji-Log/)
 
