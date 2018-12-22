@@ -1,0 +1,6 @@
+{
+    "token":"random_token_key_please_change_me",
+    "host":"localhost",
+    "port":"1234",
+    "ssl_mode":"development"
+}
