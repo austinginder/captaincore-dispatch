@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"net/http"
@@ -32,6 +33,10 @@ var err error
 var config = LoadConfiguration("config.json")
 
 type httpHandlerFunc func(http.ResponseWriter, *http.Request)
+
+const (
+	htmlIndex = `<html><body>Welcome!</body></html>`
+)
 
 type Config struct {
 	Token   string `json:"token"`
@@ -277,25 +282,43 @@ func handleRequests() {
 		log.Fatal(httpsSrv.ListenAndServeTLS("", ""))
 
 		// Spin up web server on port 80 to listen for autocert HTTP challenge
+		httpSrv = makeHTTPServer()
 
-		httpSrv = &http.Server{
-			ReadTimeout:  5 * time.Second,
-			WriteTimeout: 5 * time.Second,
-			IdleTimeout:  120 * time.Second,
-			Handler:      http.DefaultServeMux,
-		}
+		// allow autocert handle Let's Encrypt auth callbacks over HTTP.
 		if m != nil {
-			// allow autocert handle Let's Encrypt auth callbacks over HTTP.
 			// https://github.com/golang/go/issues/21890
 			httpSrv.Handler = m.HTTPHandler(httpSrv.Handler)
-			httpSrv.Addr = ":80"
-			err := httpSrv.ListenAndServe()
-			if err != nil {
-				log.Fatalf("httpSrv.ListenAndServe() failed with %s", err)
-			}
+		}
+
+		httpSrv.Addr = ":80"
+		err := httpSrv.ListenAndServe()
+		if err != nil {
+			log.Fatalf("httpSrv.ListenAndServe() failed with %s", err)
 		}
 
 	}
+
+}
+
+func handleIndex(w http.ResponseWriter, r *http.Request) {
+	io.WriteString(w, htmlIndex)
+}
+
+func makeServerFromMux(mux *http.ServeMux) *http.Server {
+	// set timeouts so that a slow or malicious client doesn't
+	// hold resources forever
+	return &http.Server{
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+		IdleTimeout:  120 * time.Second,
+		Handler:      mux,
+	}
+}
+
+func makeHTTPServer() *http.Server {
+	mux := &http.ServeMux{}
+	mux.HandleFunc("/", handleIndex)
+	return makeServerFromMux(mux)
 
 }
 
