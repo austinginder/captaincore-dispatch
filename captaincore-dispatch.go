@@ -279,22 +279,30 @@ func handleRequests() {
 		httpsSrv.Addr = config.Host + ":443"
 		httpsSrv.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate}
 
-		log.Fatal(httpsSrv.ListenAndServeTLS("", ""))
+		// Launch HTTPS server
+		go func() {
+			log.Fatal(httpsSrv.ListenAndServeTLS("", ""))
+		}()
 
-		// Spin up web server on port 80 to listen for autocert HTTP challenge
-		httpSrv = makeHTTPServer()
+		// Launch HTTP server
+		go func() {
 
-		// allow autocert handle Let's Encrypt auth callbacks over HTTP.
-		if m != nil {
-			// https://github.com/golang/go/issues/21890
-			httpSrv.Handler = m.HTTPHandler(httpSrv.Handler)
-		}
+			// Spin up web server on port 80 to listen for autocert HTTP challenge
+			httpSrv = makeHTTPServer()
 
-		httpSrv.Addr = ":80"
-		err := httpSrv.ListenAndServe()
-		if err != nil {
-			log.Fatalf("httpSrv.ListenAndServe() failed with %s", err)
-		}
+			// allow autocert handle Let's Encrypt auth callbacks over HTTP.
+			if m != nil {
+				// https://github.com/golang/go/issues/21890
+				httpSrv.Handler = m.HTTPHandler(httpSrv.Handler)
+			}
+
+			httpSrv.Addr = ":80"
+			err := httpSrv.ListenAndServe()
+			if err != nil {
+				log.Fatalf("httpSrv.ListenAndServe() failed with %s", err)
+			}
+
+		}()
 
 	}
 
