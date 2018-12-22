@@ -91,22 +91,22 @@ func generateCertificateAuthority() {
 	}
 
 	// Public key
-	certOut, err := os.Create("ca.crt")
+	certOut, err := os.Create("certs/ca.crt")
 	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: caB})
 	certOut.Close()
-	log.Print("written cat.crt\n")
+	log.Print("written certs/cat.crt\n")
 
 	// Private key
-	keyOut, err := os.OpenFile("ca.key", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile("certs/ca.key", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
 	keyOut.Close()
-	log.Print("written ca.key\n")
+	log.Print("written certs/ca.key\n")
 }
 
 func generateCert() {
 
 	// Load CA
-	catls, err := tls.LoadX509KeyPair("ca.crt", "ca.key")
+	catls, err := tls.LoadX509KeyPair("certs/ca.crt", "certs/ca.key")
 	if err != nil {
 		panic(err)
 	}
@@ -143,16 +143,16 @@ func generateCert() {
 	certB, err := x509.CreateCertificate(rand.Reader, cert, ca, pub, catls.PrivateKey)
 
 	// Public key
-	certOut, err := os.Create("cert.pem")
+	certOut, err := os.Create("certs/cert.pem")
 	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certB})
 	certOut.Close()
-	log.Print("written cert.pem\n")
+	log.Print("written certs/cert.pem\n")
 
 	// Private key
-	keyOut, err := os.OpenFile("key.pem", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile("certs/key.pem", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
 	keyOut.Close()
-	log.Print("written key.pem\n")
+	log.Print("written certs/key.pem\n")
 }
 
 func allTasks(w http.ResponseWriter, r *http.Request) {
@@ -233,7 +233,7 @@ func handleRequests() {
 	if config.SSLMode == "development" {
 
 		// Generate ca.crt and ca.key if not found
-		caFile, err := os.Open("ca.crt")
+		caFile, err := os.Open("certs/ca.crt")
 		if err != nil {
 			generateCertificateAuthority()
 		}
@@ -244,7 +244,7 @@ func handleRequests() {
 
 		// Launch HTTPS server
 		fmt.Println("Starting server https://" + config.Host + ":" + config.Port)
-		log.Fatal(http.ListenAndServeTLS(":"+config.Port, "cert.pem", "key.pem", handlers.LoggingHandler(os.Stdout, router)))
+		log.Fatal(http.ListenAndServeTLS(":"+config.Port, "certs/cert.pem", "certs/key.pem", handlers.LoggingHandler(os.Stdout, router)))
 
 	}
 	if config.SSLMode == "production" {
@@ -263,7 +263,7 @@ func handleRequests() {
 
 		//  handlers.LoggingHandler(os.Stdout, router
 
-		dataDir := "."
+		dataDir := "certs/"
 		hostPolicy := func(ctx context.Context, host string) error {
 			// Note: change to your real domain
 			allowedHost := config.Host
