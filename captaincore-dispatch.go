@@ -164,14 +164,15 @@ func allTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func newTask(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("New Task Endpoint Hit")
 	var task Task
 	json.NewDecoder(r.Body).Decode(&task)
 
 	task.Status = "Started"
 
 	db.Create(&task)
-	fmt.Fprintf(w, "New Task Successfully Created")
+	taskID := strconv.FormatUint(uint64(task.ID), 10)
+	response := "[{ \"task_id\" : " + taskID + "}]"
+	fmt.Fprintf(w, response)
 
 	// Starts running CaptainCore command
 	go runCommand("captaincore "+task.Command, task)
