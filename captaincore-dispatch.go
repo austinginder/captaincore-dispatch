@@ -364,8 +364,8 @@ func runCommand(cmd string, t Task) string {
 	//	Run the command
 	comand.Run()
 
-	fmt.Println(out.String())
-	fmt.Println(stderr.String())
+	// Standard out: out.String()
+	// Standard errors: stderr.String()
 
 	t.Status = "Completed"
 	db.Save(&t)
