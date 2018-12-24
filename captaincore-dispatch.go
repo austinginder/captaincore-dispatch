@@ -165,6 +165,20 @@ func allTasks(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tasks)
 }
 
+func newRun(w http.ResponseWriter, r *http.Request) {
+	var task Task
+	json.NewDecoder(r.Body).Decode(&task)
+
+	task.Status = "Started"
+
+	db.Create(&task)
+
+	// Starts running CaptainCore command
+	response := runCommand("captaincore "+task.Command, task)
+	fmt.Fprintf(w, response)
+
+}
+
 func newTask(w http.ResponseWriter, r *http.Request) {
 	var task Task
 	json.NewDecoder(r.Body).Decode(&task)
@@ -230,6 +244,7 @@ func handleRequests() {
 	router.HandleFunc("/task/{id}", checkSecurity(deleteTask)).Methods("DELETE")
 	router.HandleFunc("/tasks", checkSecurity(newTask)).Methods("POST")
 	router.HandleFunc("/tasks", checkSecurity(allTasks)).Methods("GET")
+	router.HandleFunc("/run", checkSecurity(newRun)).Methods("POST")
 
 	if config.SSLMode == "development" {
 
