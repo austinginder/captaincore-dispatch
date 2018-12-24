@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,8 +48,9 @@ type Config struct {
 
 type Task struct {
 	gorm.Model
-	Command string
-	Status  string
+	Command  string
+	Status   string
+	Response string
 }
 
 func LoadConfiguration(file string) Config {
@@ -198,9 +200,7 @@ func viewTask(w http.ResponseWriter, r *http.Request) {
 
 	var tasks Task
 	db.Where("id = ?", id).Find(&tasks)
-
 	fmt.Println("{}", tasks)
-
 	json.NewEncoder(w).Encode(tasks)
 }
 
@@ -343,6 +343,11 @@ func initialMigration() {
 
 }
 
+func isJSON(str string) bool {
+	var js json.RawMessage
+	return json.Unmarshal([]byte(str), &js) == nil
+}
+
 func runCommand(cmd string, t Task) string {
 	// Taken from: https://gist.github.com/danesparza/a651ac923d6313b9d1b7563c9245743b
 
@@ -369,6 +374,12 @@ func runCommand(cmd string, t Task) string {
 	// Standard errors: stderr.String()
 
 	t.Status = "Completed"
+
+	// Add results to db if in JSON format
+	if isJSON(out.String()) {
+		t.Response = out.String()
+	}
+
 	db.Save(&t)
 
 	return out.String()
