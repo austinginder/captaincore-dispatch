@@ -366,7 +366,7 @@ func isJSON(str string) bool {
 func runCommand(cmd string, t Task) string {
 	// Taken from: https://gist.github.com/danesparza/a651ac923d6313b9d1b7563c9245743b
 
-	//	Split the entire command up using ' -' as the delimeter
+	//	Split the entire command up using ' ' as the delimeter
 	parts := strings.Split(cmd, " ")
 
 	//	The first part is the command, the rest are the args:
@@ -374,19 +374,16 @@ func runCommand(cmd string, t Task) string {
 	arguments := parts[1:len(parts)]
 
 	//	Format the command
-	comand := exec.Command(head, arguments...)
+	command := exec.Command(head, arguments...)
 
 	//	Sanity check -- capture stdout and stderr:
 	var out bytes.Buffer
 	var stderr bytes.Buffer
-	comand.Stdout = &out
-	comand.Stderr = &stderr
+	command.Stdout = &out    // Standard out: out.String()
+	command.Stderr = &stderr // Standard errors: stderr.String()
 
 	//	Run the command
-	comand.Run()
-
-	// Standard out: out.String()
-	// Standard errors: stderr.String()
+	command.Run()
 
 	t.Status = "Completed"
 
