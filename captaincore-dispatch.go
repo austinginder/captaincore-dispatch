@@ -158,9 +158,15 @@ func generateCert() {
 }
 
 func allTasks(w http.ResponseWriter, r *http.Request) {
-
 	var tasks []Task
-	db.Find(&tasks)
+	vars := mux.Vars(r)
+	page, _ := strconv.Atoi(vars["page"])
+	if page > 0 {
+		offset := page * 10
+		db.Offset(offset).Limit(10).Order("created_at desc").Find(&tasks)
+	} else {
+		db.Limit(10).Order("created_at desc").Find(&tasks)
+	}
 
 	json.NewEncoder(w).Encode(tasks)
 }
@@ -244,6 +250,7 @@ func handleRequests() {
 	router.HandleFunc("/task/{id}", checkSecurity(deleteTask)).Methods("DELETE")
 	router.HandleFunc("/tasks", checkSecurity(newTask)).Methods("POST")
 	router.HandleFunc("/tasks", checkSecurity(allTasks)).Methods("GET")
+	router.HandleFunc("/tasks/{page}", checkSecurity(allTasks)).Methods("GET")
 	router.HandleFunc("/run", checkSecurity(newRun)).Methods("POST")
 
 	if config.SSLMode == "development" {
