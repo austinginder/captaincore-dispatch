@@ -17,8 +17,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gorilla/handlers"
@@ -371,10 +371,11 @@ func isJSON(str string) bool {
 }
 
 func runCommand(cmd string, t Task) string {
-	// Taken from: https://gist.github.com/danesparza/a651ac923d6313b9d1b7563c9245743b
 
-	//	Split the entire command up using ' ' as the delimeter
-	parts := strings.Split(cmd, " ")
+	// See https://regexr.com/4154h for custom regex to parse commands
+	// Inspired by https://gist.github.com/danesparza/a651ac923d6313b9d1b7563c9245743b
+	pattern := `(--[^\s]+="[^"]+")|"([^"]+)"|'([^']+)'|([^\s]+)`
+	parts := regexp.MustCompile(pattern).FindAllString(cmd, -1)
 
 	//	The first part is the command, the rest are the args:
 	head := parts[0]
