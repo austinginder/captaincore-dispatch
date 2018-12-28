@@ -193,7 +193,7 @@ func newTask(w http.ResponseWriter, r *http.Request) {
 
 	db.Create(&task)
 	taskID := strconv.FormatUint(uint64(task.ID), 10)
-	response := "[{ \"task_id\" : " + taskID + "}]"
+	response := "{ \"task_id\" : " + taskID + "}"
 	fmt.Fprintf(w, response)
 
 	// Starts running CaptainCore command
