@@ -32,6 +32,7 @@ import (
 var db *gorm.DB
 var err error
 var config = LoadConfiguration("config.json")
+var debug bool
 
 type httpHandlerFunc func(http.ResponseWriter, *http.Request)
 
@@ -385,9 +386,8 @@ func runCommand(cmd string, t Task) string {
 	command := exec.Command(head, arguments...)
 
 	//	Sanity check -- capture stdout and stderr:
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	command.Stdout = &out    // Standard out: out.String()
+	var stdout, stderr bytes.Buffer
+	command.Stdout = &stdout // Standard out: out.String()
 	command.Stderr = &stderr // Standard errors: stderr.String()
 
 	//	Run the command
@@ -396,13 +396,17 @@ func runCommand(cmd string, t Task) string {
 	t.Status = "Completed"
 
 	// Add results to db if in JSON format
-	if isJSON(out.String()) {
-		t.Response = out.String()
+	if isJSON(stdout.String()) {
+		t.Response = stdout.String()
 	}
 
 	db.Save(&t)
 
-	return out.String()
+	if debug == true {
+		fmt.Println(stdout.String())
+	}
+
+	return stdout.String()
 
 }
 
@@ -472,8 +476,9 @@ Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
 
 Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
 `)
-
-	cmd.AddCommand(serverCmd())
+	cmdServerCmd := serverCmd()
+	cmd.AddCommand(cmdServerCmd)
+	cmdServerCmd.Flags().BoolVar(&debug, "debug", false, "Debug")
 
 	if err := cmd.Execute(); err != nil {
 		//fmt.Println(err)
