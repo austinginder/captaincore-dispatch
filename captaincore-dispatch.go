@@ -239,6 +239,14 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Successfully Updated Task")
 }
 
+func faviconAppleHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "img/apple-touch-icon.png")
+}
+
+func faviconHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "img/favicon.ico")
+}
+
 func handleRequests() {
 
 	var httpsSrv *http.Server
@@ -246,6 +254,8 @@ func handleRequests() {
 	var m *autocert.Manager
 
 	router := mux.NewRouter().StrictSlash(true)
+	router.HandleFunc("/apple-touch-icon.png", faviconAppleHandler).Methods("GET")
+	router.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
 	router.HandleFunc("/task/{id}", checkSecurity(viewTask)).Methods("GET")
 	router.HandleFunc("/task/{id}", checkSecurity(updateTask)).Methods("PUT")
 	router.HandleFunc("/task/{id}", checkSecurity(deleteTask)).Methods("DELETE")
