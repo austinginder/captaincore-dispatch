@@ -459,7 +459,7 @@ func main() {
 	cmd := &cobra.Command{
 		Use:     "captaincore-dispatch",
 		Short:   "CaptainCore Dispatch Server 💻",
-		Version: "0.1.1",
+		Version: "0.1.2",
 	}
 
 	cmd.SetUsageTemplate(`[33mUsage:[0m{{if .Runnable}}

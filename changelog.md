@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.2] - 2019-02-07
+### Added
+- New argument`--debug` to `server` command
+- Favicon
+
 ## [0.1.1] - 2018-12-31
 ### Added
 - New endpoint `/run` for running and outputting response immediately.
