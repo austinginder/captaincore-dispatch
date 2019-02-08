@@ -2,3 +2,4 @@ certs/
 captaincore-dispatch
 config.json
 sql.db
+.DS_Store
