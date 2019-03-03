@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/handlers"
@@ -388,19 +389,29 @@ func runCommand(cmd string, t Task) string {
 	pattern := `(--[^\s]+="[^"]+")|"([^"]+)"|'([^']+)'|([^\s]+)`
 	parts := regexp.MustCompile(pattern).FindAllString(cmd, -1)
 
-	//	The first part is the command, the rest are the args:
+	// The first part is the command, the rest are the args:
 	head := parts[0]
 	arguments := parts[1:len(parts)]
 
-	//	Format the command
-	command := exec.Command(head, arguments...)
+	// Loop through arguments and remove quotes from ---command="" due to bug how golang handles them
+	for i, v := range arguments {
+		if strings.HasPrefix(v, "--command=") {
+			newArgument := strings.Replace(v, "\"", "", 1)
+			newArgument = strings.Replace(newArgument, "\"", "", -1)
+			arguments[i] = newArgument
+		}
+	}
 
-	//	Sanity check -- capture stdout and stderr:
+	// Format the command
+	command := exec.Command(head, arguments...)
+	//command := exec.Command(head, `ssh`, `dev@kinsta`, `--command=wp plugin install "https://anchor.host/wp-content/uploads/deploy/advanced-custom-fields-pro (12).zip" --force --activate`)
+
+	// Sanity check -- capture stdout and stderr:
 	var stdout, stderr bytes.Buffer
 	command.Stdout = &stdout // Standard out: out.String()
 	command.Stderr = &stderr // Standard errors: stderr.String()
 
-	//	Run the command
+	// Run the command
 	command.Run()
 
 	t.Status = "Completed"
@@ -413,7 +424,13 @@ func runCommand(cmd string, t Task) string {
 	db.Save(&t)
 
 	if debug == true {
+		// Loop through and output command arguments
+		// fmt.Println(strings.Join(arguments, ", "))
+		for _, v := range command.Args {
+			fmt.Println(v)
+		}
 		fmt.Println(stdout.String())
+		fmt.Println(stderr.String())
 	}
 
 	return stdout.String()
@@ -459,7 +476,7 @@ func main() {
 	cmd := &cobra.Command{
 		Use:     "captaincore-dispatch",
 		Short:   "CaptainCore Dispatch Server 💻",
-		Version: "0.1.2",
+		Version: "0.1.3",
 	}
 
 	cmd.SetUsageTemplate(`[33mUsage:[0m{{if .Runnable}}
