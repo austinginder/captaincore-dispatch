@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.3] - 2019-03-03
+### Changed
+- Bug fix when passing arguments with double quotes to command line
+
 ## [0.1.2] - 2019-02-07
 ### Added
 - New argument`--debug` to `server` command
