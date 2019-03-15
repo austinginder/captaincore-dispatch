@@ -42,7 +42,18 @@ const (
 )
 
 type Config struct {
-	Token   string `json:"token"`
+	Tokens []struct {
+		CaptainID string `json:"captain_id"`
+		Token     string `json:"token"`
+	} `json:"tokens"`
+	Servers []struct {
+		Name     string `json:"name"`
+		Address  string `json:"address"`
+		Token    string `json:"token"`
+		Requires []struct {
+			Command string `json:"command"`
+		} `json:"requires"`
+	} `json:"servers"`
 	Host    string `json:"host"`
 	Port    string `json:"port"`
 	SSLMode string `json:"ssl_mode"`
@@ -50,9 +61,10 @@ type Config struct {
 
 type Task struct {
 	gorm.Model
-	Command  string
-	Status   string
-	Response string
+	CaptainID int
+	Command   string
+	Status    string
+	Response  string
 }
 
 func LoadConfiguration(file string) Config {
@@ -65,6 +77,15 @@ func LoadConfiguration(file string) Config {
 	jsonParser := json.NewDecoder(configFile)
 	jsonParser.Decode(&config)
 	return config
+}
+
+func fetchCaptainID(t string, r *http.Request) string {
+	for _, v := range config.Tokens {
+		if v.Token == t {
+			return v.CaptainID
+		}
+	}
+	return "0"
 }
 
 func generateCertificateAuthority() {
@@ -162,12 +183,14 @@ func generateCert() {
 func allTasks(w http.ResponseWriter, r *http.Request) {
 	var tasks []Task
 	vars := mux.Vars(r)
+	token := r.Header.Get("token")
+	captainID := fetchCaptainID(token, r)
 	page, _ := strconv.Atoi(vars["page"])
 	if page > 0 {
 		offset := page * 10
-		db.Offset(offset).Limit(10).Order("created_at desc").Find(&tasks)
+		db.Offset(offset).Limit(10).Order("created_at desc").Where("captain_id = ?", captainID).Find(&tasks)
 	} else {
-		db.Limit(10).Order("created_at desc").Find(&tasks)
+		db.Limit(10).Order("created_at desc").Where("captain_id = ?", captainID).Find(&tasks)
 	}
 
 	json.NewEncoder(w).Encode(tasks)
@@ -176,13 +199,16 @@ func allTasks(w http.ResponseWriter, r *http.Request) {
 func newRun(w http.ResponseWriter, r *http.Request) {
 	var task Task
 	json.NewDecoder(r.Body).Decode(&task)
+	token := r.Header.Get("token")
+	captainID := fetchCaptainID(token, r)
 
 	task.Status = "Started"
+	task.CaptainID, err = strconv.Atoi(captainID)
 
 	db.Create(&task)
 
 	// Starts running CaptainCore command
-	response := runCommand("captaincore "+task.Command, task)
+	response := runCommand("captaincore "+task.Command+" --captain_id="+captainID, task)
 	fmt.Fprintf(w, response)
 
 }
@@ -190,8 +216,10 @@ func newRun(w http.ResponseWriter, r *http.Request) {
 func newTask(w http.ResponseWriter, r *http.Request) {
 	var task Task
 	json.NewDecoder(r.Body).Decode(&task)
-
+	token := r.Header.Get("token")
+	captainID := fetchCaptainID(token, r)
 	task.Status = "Started"
+	task.CaptainID, err = strconv.Atoi(captainID)
 
 	db.Create(&task)
 	taskID := strconv.FormatUint(uint64(task.ID), 10)
@@ -199,7 +227,7 @@ func newTask(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, response)
 
 	// Starts running CaptainCore command
-	go runCommand("captaincore "+task.Command, task)
+	go runCommand("captaincore "+task.Command+" --captain_id="+captainID, task)
 
 }
 
@@ -219,9 +247,11 @@ func viewTask(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	id := vars["id"]
+	token := r.Header.Get("token")
+	captainID := fetchCaptainID(token, r)
 
 	var tasks Task
-	db.Where("id = ?", id).Find(&tasks)
+	db.Where("id = ?", id).Where("captain_id = ?", captainID).Find(&tasks)
 	fmt.Println("{}", tasks)
 	json.NewEncoder(w).Encode(tasks)
 }
@@ -453,7 +483,13 @@ func serverCmd() *cobra.Command {
 func checkSecurity(next httpHandlerFunc) httpHandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
 		header := req.Header.Get("token")
-		if header != config.Token {
+		unauthorized := true
+		for _, v := range config.Tokens {
+			if v.Token == header {
+				unauthorized = false
+			}
+		}
+		if unauthorized {
 			res.WriteHeader(http.StatusUnauthorized)
 			res.Write([]byte("401 - Unauthorized"))
 			return
