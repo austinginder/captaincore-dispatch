@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/big"
 	"net/http"
@@ -86,6 +87,17 @@ func fetchCaptainID(t string, r *http.Request) string {
 		}
 	}
 	return "0"
+}
+
+func deferCommand(c string) (string, string) {
+	for _, v := range config.Servers {
+		for _, r := range v.Requires {
+			if r.Command == c {
+				return v.Address, v.Token
+			}
+		}
+	}
+	return "0", "0"
 }
 
 func generateCertificateAuthority() {
@@ -422,8 +434,39 @@ func runCommand(cmd string, t Task) string {
 	// The first part is the command, the rest are the args:
 	head := parts[0]
 	arguments := parts[1:len(parts)]
+	args := strings.Join(arguments, " ")
 
-	// Loop through arguments and remove quotes from ---command="" due to bug how golang handles them
+	deferServer, defertoken := deferCommand(parts[1])
+	if deferServer != "0" {
+		// Defer command to defined CaptainCore server
+		fmt.Println("Defering " + args + " to server " + deferServer)
+
+		var jsonStr = []byte(`{"command":"` + args + `"}`)
+		fmt.Println(bytes.NewBuffer(jsonStr))
+		url := "https://" + deferServer + "/run"
+		req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
+		req.Header.Add("token", defertoken)
+		req.Header.Add("Content-Type", "application/json")
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			panic(err)
+		}
+		defer resp.Body.Close()
+
+		//fmt.Println("response Status:", resp.Status)
+		//fmt.Println("response Headers:", resp.Header)
+		body, _ := ioutil.ReadAll(resp.Body)
+		//fmt.Println("response Body:", string(body))
+
+		t.Status = "Deferred"
+
+		db.Save(&t)
+		return string(body)
+	}
+
+	// Loop through arguments and remove quotes from ---command="" due to bug
 	for i, v := range arguments {
 		if strings.HasPrefix(v, "--command=") {
 			newArgument := strings.Replace(v, "\"", "", 1)
@@ -434,7 +477,6 @@ func runCommand(cmd string, t Task) string {
 
 	// Format the command
 	command := exec.Command(head, arguments...)
-	//command := exec.Command(head, `ssh`, `dev@kinsta`, `--command=wp plugin install "https://anchor.host/wp-content/uploads/deploy/advanced-custom-fields-pro (12).zip" --force --activate`)
 
 	// Sanity check -- capture stdout and stderr:
 	var stdout, stderr bytes.Buffer
