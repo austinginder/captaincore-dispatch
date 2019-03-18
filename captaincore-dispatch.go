@@ -50,7 +50,6 @@ type Config struct {
 	Servers []struct {
 		Name     string `json:"name"`
 		Address  string `json:"address"`
-		Token    string `json:"token"`
 		Requires []struct {
 			Command string `json:"command"`
 		} `json:"requires"`
@@ -66,6 +65,13 @@ type Task struct {
 	Command   string
 	Status    string
 	Response  string
+	Origin    string
+}
+
+type Origin struct {
+	ID     string
+	Server string
+	Token  string
 }
 
 func LoadConfiguration(file string) Config {
@@ -487,6 +493,38 @@ func runCommand(cmd string, t Task) string {
 	command.Run()
 
 	t.Status = "Completed"
+
+	// If origin set then make request to mark that completed
+	if t.Origin != "" {
+		var origin Origin
+		json.Unmarshal([]byte(t.Origin), &origin)
+
+		fmt.Println("Updating origin server " + origin.Server + " Job ID " + origin.ID)
+
+		// Build URL
+		url := "https://" + origin.Server + "/task/" + origin.ID
+
+		client := &http.Client{}
+		client.Timeout = time.Second * 15
+
+		req, err := http.NewRequest(http.MethodPut, url, nil)
+		if err != nil {
+			log.Fatalf("http.NewRequest() failed with '%s'\n", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json; charset=utf-8")
+		req.Header.Add("token", origin.Token)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Fatalf("client.Do() failed with '%s'\n", err)
+		}
+
+		defer resp.Body.Close()
+		if err != nil {
+			log.Fatalf("ioutil.ReadAll() failed with '%s'\n", err)
+		}
+	}
 
 	// Add results to db if in JSON format
 	if isJSON(stdout.String()) {
