@@ -277,14 +277,15 @@ func viewTask(w http.ResponseWriter, r *http.Request) {
 func updateTask(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
-	command := vars["command"]
+	id := vars["id"]
+	token := r.Header.Get("token")
+	captainID := fetchCaptainID(token, r)
 
-	var tasks Task
-	db.Where("command = ?", command).Find(&tasks)
+	var task Task
+	db.Where("id = ?", id).Where("captain_id = ?", captainID).Find(&task)
+	task.Status = "Completed"
+	db.Save(&task)
 
-	tasks.Command = command
-
-	db.Save(&tasks)
 	fmt.Fprintf(w, "Successfully Updated Task")
 }
 
