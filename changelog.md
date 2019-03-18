@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.4] - 2019-03-18
+### Added
+- Fleet Mode  ⛵⛵⛵ (support for mutiple captains). Tokens are now assigned to a CaptainID which grants access to just their sites. See `config.json.sample` for new token format.
+- Support for mutiple CaptainCore servers. Can specify server within config.json and list out commands which will be sent direct to that server rather then run locally.
+- A deferred command will track the origin server info. This is used to mark the origin server Job completed once the command has completed. 
+
 ## [0.1.3] - 2019-03-03
 ### Changed
 - Bug fix when passing arguments with double quotes to command line
