@@ -95,15 +95,24 @@ func fetchCaptainID(t string, r *http.Request) string {
 	return "0"
 }
 
-func deferCommand(c string) (string, string) {
+func fetchToken(captainID string) string {
+	for _, v := range config.Tokens {
+		if v.CaptainID == captainID {
+			return v.Token
+		}
+	}
+	return "0"
+}
+
+func deferCommand(c string) string {
 	for _, v := range config.Servers {
 		for _, r := range v.Requires {
 			if r.Command == c {
-				return v.Address, v.Token
+				return v.Address
 			}
 		}
 	}
-	return "0", "0"
+	return "0"
 }
 
 func generateCertificateAuthority() {
@@ -441,18 +450,26 @@ func runCommand(cmd string, t Task) string {
 	// The first part is the command, the rest are the args:
 	head := parts[0]
 	arguments := parts[1:len(parts)]
-	args := strings.Join(arguments, " ")
 
-	deferServer, defertoken := deferCommand(parts[1])
+	deferServer := deferCommand(parts[1])
 	if deferServer != "0" {
 		// Defer command to defined CaptainCore server
-		fmt.Println("Defering " + args + " to server " + deferServer)
+		fmt.Println("Defering " + t.Command + " to server " + deferServer)
+		captainID := strconv.Itoa(t.CaptainID)
+		token := fetchToken(captainID)
+		taskID := strconv.FormatUint(uint64(t.ID), 10)
 
-		var jsonStr = []byte(`{"command":"` + args + `"}`)
+		origin := `{\"id\":\"` + taskID + `\",\"server\":\"` + config.Host + `\",\"token\":\"` + token + `\"}`
+
+		var jsonStr = []byte(`{"command":"` + t.Command + `","origin":"` + origin + `"`)
+
 		fmt.Println(bytes.NewBuffer(jsonStr))
-		url := "https://" + deferServer + "/run"
+
+		// Build URL
+		url := "https://" + deferServer + "/tasks"
+
 		req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
-		req.Header.Add("token", defertoken)
+		req.Header.Add("token", token)
 		req.Header.Add("Content-Type", "application/json")
 
 		client := &http.Client{}
@@ -467,10 +484,14 @@ func runCommand(cmd string, t Task) string {
 		body, _ := ioutil.ReadAll(resp.Body)
 		//fmt.Println("response Body:", string(body))
 
-		t.Status = "Deferred"
+		t.Status = "Started"
+		t.Response = string(body)
 
 		db.Save(&t)
-		return string(body)
+
+		response := "{ \"task_id\" : " + taskID + "}"
+
+		return response
 	}
 
 	// Loop through arguments and remove quotes from ---command="" due to bug
