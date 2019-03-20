@@ -461,7 +461,7 @@ func runCommand(cmd string, t Task) string {
 
 		origin := `{\"id\":\"` + taskID + `\",\"server\":\"` + config.Host + `\",\"token\":\"` + token + `\"}`
 
-		var jsonStr = []byte(`{"command":"` + t.Command + `","origin":"` + origin + `"`)
+		var jsonStr = []byte(`{"command":"` + t.Command + `","origin":"` + origin + `"}`)
 
 		fmt.Println(bytes.NewBuffer(jsonStr))
 
@@ -475,7 +475,7 @@ func runCommand(cmd string, t Task) string {
 		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
 		}
 		defer resp.Body.Close()
 
