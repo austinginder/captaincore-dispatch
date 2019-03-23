@@ -451,6 +451,36 @@ func runCommand(cmd string, t Task) string {
 	head := parts[0]
 	arguments := parts[1:len(parts)]
 
+	// If site command then loop through servers and reply a bare version of the command
+	if len(config.Servers) >= 1 && parts[1] == "site" {
+
+		relayCommand := strings.Replace(t.Command, "site ", "site bare-", 1)
+		captainID := strconv.Itoa(t.CaptainID)
+		token := fetchToken(captainID)
+
+		for _, v := range config.Servers {
+			fmt.Println("Relaying " + relayCommand + " to server " + v.Address)
+			url := "https://" + v.Address + "/tasks"
+			var jsonStr = []byte(`{"command":"` + relayCommand + `"}`)
+			req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
+			req.Header.Add("token", token)
+			req.Header.Add("Content-Type", "application/json")
+
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				fmt.Println(err)
+			}
+			defer resp.Body.Close()
+
+			if debug == true {
+				body, _ := ioutil.ReadAll(resp.Body)
+				fmt.Println(string(body))
+			}
+
+		}
+	}
+
 	deferServer := deferCommand(parts[1])
 	if deferServer != "0" {
 		// Defer command to defined CaptainCore server
