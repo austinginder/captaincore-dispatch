@@ -455,6 +455,7 @@ func runCommand(cmd string, t Task) string {
 	if len(config.Servers) >= 1 && parts[1] == "site" {
 
 		relayCommand := strings.Replace(t.Command, "site ", "site bare-", 1)
+		relayCommand = strings.Replace(relayCommand, "\"", "\\\"", -1)
 		captainID := strconv.Itoa(t.CaptainID)
 		token := fetchToken(captainID)
 
