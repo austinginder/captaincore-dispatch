@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.5] - 2019-04-22
+### Added
+- Relay site commands to servers. Commands are changed to bare version. Example `site add` is sent to remote servers as `site bare-add`.
+
 ## [0.1.4] - 2019-03-18
 ### Added
 - Fleet Mode  ⛵⛵⛵ (support for mutiple captains). Tokens are now assigned to a CaptainID which grants access to just their sites. See `config.json.sample` for new token format.
