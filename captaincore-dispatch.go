@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -25,22 +26,51 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/acme/autocert"
 )
 
+const letternumberBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
 var db *gorm.DB
 var err error
 var config = LoadConfiguration("config.json")
 var debug bool
+
+//var clients = make(map[*websocket.Conn]bool) // connected clients
+type Client struct {
+	Token string
+	// The websocket connection.
+	conn *websocket.Conn
+
+	// Buffered channel of outbound messages.
+	send chan []byte
+}
+
+var clients []Client
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
 
 type httpHandlerFunc func(http.ResponseWriter, *http.Request)
 
 const (
 	htmlIndex = `<html><body>Welcome!</body></html>`
 )
+
+// Define our message object
+type SocketRequest struct {
+	Token  string `json:"token"`
+	Action string `json:"action"`
+}
 
 type Config struct {
 	Tokens []struct {
@@ -66,6 +96,7 @@ type Task struct {
 	Status    string
 	Response  string
 	Origin    string
+	Token     string
 }
 
 type Origin struct {
@@ -102,6 +133,30 @@ func fetchToken(captainID string) string {
 		}
 	}
 	return "0"
+}
+
+func generateToken() string {
+	n := 48
+	output := make([]byte, n)
+	// We will take n bytes, one byte for each character of output.
+	randomness := make([]byte, n)
+	// read all random
+	_, err := rand.Read(randomness)
+	if err != nil {
+		panic(err)
+	}
+	l := len(letternumberBytes)
+	// fill output
+	for pos := range output {
+		// get random item
+		random := uint8(randomness[pos])
+		// random % 64
+		randomPos := random % uint8(l)
+		// put into output
+		output[pos] = letternumberBytes[randomPos]
+	}
+	o := string(output)
+	return o
 }
 
 func deferCommand(c string) string {
@@ -227,10 +282,12 @@ func newRun(w http.ResponseWriter, r *http.Request) {
 	var task Task
 	json.NewDecoder(r.Body).Decode(&task)
 	token := r.Header.Get("token")
+	randomToken := generateToken()
 	captainID := fetchCaptainID(token, r)
 
 	task.Status = "Started"
 	task.CaptainID, err = strconv.Atoi(captainID)
+	task.Token = randomToken
 
 	db.Create(&task)
 
@@ -244,17 +301,16 @@ func newTask(w http.ResponseWriter, r *http.Request) {
 	var task Task
 	json.NewDecoder(r.Body).Decode(&task)
 	token := r.Header.Get("token")
+	randomToken := generateToken()
 	captainID := fetchCaptainID(token, r)
-	task.Status = "Started"
+	task.Status = "Queued"
 	task.CaptainID, err = strconv.Atoi(captainID)
+	task.Token = randomToken
 
 	db.Create(&task)
 	taskID := strconv.FormatUint(uint64(task.ID), 10)
-	response := "{ \"task_id\" : " + taskID + "}"
+	response := "{ \"task_id\" : " + taskID + ", \"token\" : \"" + randomToken + "\" }"
 	fmt.Fprintf(w, response)
-
-	// Starts running CaptainCore command
-	go runCommand("captaincore "+task.Command+" --captain_id="+captainID, task)
 
 }
 
@@ -322,6 +378,7 @@ func handleRequests() {
 	router.HandleFunc("/tasks", checkSecurity(allTasks)).Methods("GET")
 	router.HandleFunc("/tasks/{page}", checkSecurity(allTasks)).Methods("GET")
 	router.HandleFunc("/run", checkSecurity(newRun)).Methods("POST")
+	router.HandleFunc("/ws", wsHandler)
 
 	if config.SSLMode == "development" {
 
@@ -336,7 +393,7 @@ func handleRequests() {
 		generateCert()
 
 		// Launch HTTPS server
-		fmt.Println("Starting server https://" + config.Host + ":" + config.Port)
+		fmt.Println("Starting server https://" + config.Host)
 		log.Fatal(http.ListenAndServeTLS(":"+config.Port, "certs/cert.pem", "certs/key.pem", handlers.LoggingHandler(os.Stdout, router)))
 
 	}
@@ -387,19 +444,15 @@ func handleRequests() {
 
 		// Launch HTTP server
 		go func() {
-
 			fmt.Println("Starting server http://localhost")
-
 			err := httpSrv.ListenAndServe()
 			if err != nil {
 				log.Fatalf("httpSrv.ListenAndServe() failed with %s", err)
 			}
-
 		}()
 
 		// Launch HTTPS server
-
-		fmt.Println("Starting server https://" + config.Host + ":" + config.Port)
+		fmt.Println("Starting server https://" + config.Host)
 		log.Fatal(httpsSrv.ListenAndServeTLS("", ""))
 
 	}
@@ -451,6 +504,18 @@ func runCommand(cmd string, t Task) string {
 	head := parts[0]
 	arguments := parts[1:len(parts)]
 
+	log.Println("Hunting for socket with token ", t.Token)
+
+	// Find current connection write data
+	var client Client
+	for _, c := range clients {
+		log.Println("Client:", c.Token)
+		if c.Token == t.Token {
+			client = c
+			break
+		}
+	}
+
 	// If site command then loop through servers and reply a bare version of the command
 	if len(config.Servers) >= 1 && parts[1] == "site" {
 
@@ -482,9 +547,9 @@ func runCommand(cmd string, t Task) string {
 		}
 	}
 
+	// Defer command to defined CaptainCore server
 	deferServer := deferCommand(parts[1])
 	if deferServer != "0" {
-		// Defer command to defined CaptainCore server
 		fmt.Println("Defering " + t.Command + " to server " + deferServer)
 		captainID := strconv.Itoa(t.CaptainID)
 		token := fetchToken(captainID)
@@ -538,12 +603,38 @@ func runCommand(cmd string, t Task) string {
 	command := exec.Command(head, arguments...)
 
 	// Sanity check -- capture stdout and stderr:
-	var stdout, stderr bytes.Buffer
-	command.Stdout = &stdout // Standard out: out.String()
-	command.Stderr = &stderr // Standard errors: stderr.String()
+	stdout, _ := command.StdoutPipe() // Standard out: out.String()
+	stderr, _ := command.StderrPipe() // Standard errors: stderr.String()
 
 	// Run the command
-	command.Run()
+	err := command.Start()
+	if err != nil {
+		log.Fatalf("cmd.Start() failed with '%s'\n", err)
+	}
+
+	s := bufio.NewScanner(io.MultiReader(stdout, stderr))
+	lines := []string{}
+	for s.Scan() {
+		// Write data to websocket if found
+		if client.Token == t.Token {
+			log.Println("Writting to socket:", client)
+			client.conn.WriteMessage(1, s.Bytes())
+		}
+		// Write data for final output
+		lines = append(lines, s.Text())
+	}
+
+	// Clean up websocket if found
+	if client.Token == t.Token {
+		client.conn.WriteMessage(1, []byte("Finished."))
+		client.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		client.conn.Close()
+	}
+
+	err = command.Wait()
+	if err != nil {
+		log.Fatalf("cmd.Run() failed with %s\n", err)
+	}
 
 	t.Status = "Completed"
 
@@ -580,23 +671,28 @@ func runCommand(cmd string, t Task) string {
 	}
 
 	// Add results to db if in JSON format
-	if isJSON(stdout.String()) {
-		t.Response = stdout.String()
-	}
+	//if isJSON(stdout.String()) {
+	//t.Response = stdout.String()
+	//}
 
 	db.Save(&t)
 
+	output := strings.Join(lines, "\n")
+
 	if debug == true {
+
+		log.Println("scanner output:", lines)
+
 		// Loop through and output command arguments
 		// fmt.Println(strings.Join(arguments, ", "))
 		for _, v := range command.Args {
 			fmt.Println(v)
 		}
-		fmt.Println(stdout.String())
-		fmt.Println(stderr.String())
+		//fmt.Println(stdout.String())
+		//fmt.Println(stderr.String())
 	}
 
-	return stdout.String()
+	return output //stdout.String()
 
 }
 
