@@ -362,6 +362,63 @@ func faviconHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "img/favicon.ico")
 }
 
+func wsHandler(w http.ResponseWriter, r *http.Request) {
+	// Upgrade initial GET request to a websocket
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Make sure we close the connection when the function returns
+	defer conn.Close()
+
+	newClient := Client{Token: "", conn: conn, send: make(chan []byte, 256)}
+	clients = append(clients, newClient)
+	log.Println("Successfully established connection", clients)
+
+	for {
+		data := SocketRequest{}
+		err := conn.ReadJSON(&data)
+		if err != nil {
+			fmt.Println("Error reading json.", err)
+		}
+
+		var task Task
+		db.Where("token = ?", data.Token).Find(&task)
+
+		// Refuse connection if token not valid
+		if task.Token == "" {
+
+			// Find current connection and remove from clients
+			for i := 0; i < len(clients); i++ {
+				if clients[i].conn == conn {
+					log.Println("Removing client: ", clients[i])
+					clients = append(clients[:i], clients[i+1:]...)
+					i-- // form the remove item index to start iterate next item
+				}
+			}
+			break
+
+		}
+
+		// Find current connection and update Token
+		for i := 0; i < len(clients); i++ {
+			if clients[i].conn == conn {
+				clients[i].Token = data.Token
+				break
+			}
+		}
+
+		// Execute job if requested
+		if data.Action == "start" {
+			captainID := strconv.Itoa(task.CaptainID)
+			go runCommand("captaincore "+task.Command+" --captain_id="+captainID, task)
+		}
+		log.Println("Socket data request:", data)
+		log.Println("Executing command for client:", clients)
+
+	}
+}
+
 func handleRequests() {
 
 	var httpsSrv *http.Server
