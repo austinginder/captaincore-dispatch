@@ -72,6 +72,11 @@ type SocketRequest struct {
 	Action string `json:"action"`
 }
 
+type SocketResponse struct {
+	Token  string `json:"token"`
+	TaskID string `json:"task_id"`
+}
+
 type Config struct {
 	Tokens []struct {
 		CaptainID string `json:"captain_id"`
@@ -561,7 +566,7 @@ func runCommand(cmd string, t Task) string {
 	head := parts[0]
 	arguments := parts[1:len(parts)]
 
-	log.Println("Hunting for socket with token ", t.Token)
+	// log.Println("Hunting for socket with token ", t.Token)
 
 	// Find current connection write data
 	var client Client
@@ -583,7 +588,7 @@ func runCommand(cmd string, t Task) string {
 
 		for _, v := range config.Servers {
 			fmt.Println("Relaying " + relayCommand + " to server " + v.Address)
-			url := "https://" + v.Address + "/tasks"
+			url := "https://" + v.Address + "/run"
 			var jsonStr = []byte(`{"command":"` + relayCommand + `"}`)
 			req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
 			req.Header.Add("token", token)
@@ -611,11 +616,8 @@ func runCommand(cmd string, t Task) string {
 		captainID := strconv.Itoa(t.CaptainID)
 		token := fetchToken(captainID)
 		taskID := strconv.FormatUint(uint64(t.ID), 10)
-
 		origin := `{\"id\":\"` + taskID + `\",\"server\":\"` + config.Host + `\",\"token\":\"` + token + `\"}`
-
 		var jsonStr = []byte(`{"command":"` + t.Command + `","origin":"` + origin + `"}`)
-
 		fmt.Println(bytes.NewBuffer(jsonStr))
 
 		// Build URL
@@ -625,17 +627,18 @@ func runCommand(cmd string, t Task) string {
 		req.Header.Add("token", token)
 		req.Header.Add("Content-Type", "application/json")
 
-		client := &http.Client{}
-		resp, err := client.Do(req)
+		httpclient := &http.Client{}
+		resp, err := httpclient.Do(req)
 		if err != nil {
 			fmt.Println(err)
 		}
-		defer resp.Body.Close()
 
 		//fmt.Println("response Status:", resp.Status)
 		//fmt.Println("response Headers:", resp.Header)
 		body, _ := ioutil.ReadAll(resp.Body)
-		//fmt.Println("response Body:", string(body))
+		res := SocketResponse{}
+		json.Unmarshal(body, &res)
+		fmt.Println("response Body:", res.Token)
 
 		t.Status = "Started"
 		t.Response = string(body)
@@ -643,6 +646,50 @@ func runCommand(cmd string, t Task) string {
 		db.Save(&t)
 
 		response := "{ \"task_id\" : " + taskID + "}"
+
+		// If socket found then connect to deferred server web socket and start the task
+		if client.Token == t.Token {
+
+			u := "wss://" + deferServer + "/ws"
+			log.Printf("connecting to %s", u)
+			c, _, err := websocket.DefaultDialer.Dial(u, nil)
+			if err != nil {
+				log.Fatal("dial:", err)
+			}
+			defer c.Close()
+			done := make(chan struct{})
+
+			// Start command on remote server
+			jsonMessage := "{ \"token\" : \"" + res.Token + "\", \"action\" : \"start\" }"
+			c.WriteMessage(websocket.TextMessage, []byte(jsonMessage))
+			if debug == true {
+				log.Println("Writting to socket:", client)
+				log.Println("Starting command on deferred server:", jsonMessage)
+			}
+
+			// Relay that stream output back to current client
+			go func() {
+				defer close(done)
+				for {
+					_, message, errRead := c.ReadMessage()
+					if errRead != nil {
+						log.Println("read:", errRead)
+						return
+					}
+					// Write data to websocket if found
+					client.conn.WriteMessage(1, message)
+				}
+			}()
+			for {
+				select {
+				case <-done:
+					// Clean up websocket if found
+					client.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+					client.conn.Close()
+					break
+				}
+			}
+		}
 
 		return response
 	}
