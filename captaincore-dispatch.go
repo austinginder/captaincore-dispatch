@@ -721,11 +721,18 @@ func runCommand(cmd string, t Task) string {
 	for s.Scan() {
 		// Write data to websocket if found
 		if client.Token == t.Token {
+			if debug == true {
 			log.Println("Writting to socket:", client)
+			}
 			client.conn.WriteMessage(1, s.Bytes())
 		}
 		// Write data for final output
 		lines = append(lines, s.Text())
+	}
+
+	err = command.Wait()
+	if err != nil {
+		log.Fatalf("cmd.Run() failed with %s\n", err)
 	}
 
 	// Clean up websocket if found
@@ -733,11 +740,6 @@ func runCommand(cmd string, t Task) string {
 		client.conn.WriteMessage(1, []byte("Finished."))
 		client.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		client.conn.Close()
-	}
-
-	err = command.Wait()
-	if err != nil {
-		log.Fatalf("cmd.Run() failed with %s\n", err)
 	}
 
 	t.Status = "Completed"
