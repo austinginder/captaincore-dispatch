@@ -1,13 +1,18 @@
 # Changelog
 
+## [0.1.6] - 2019-05-13
+### Added
+- Realtime websockets to stream CLI output to CaptainCore GUI.
+- Relay websockets when command is deferred to another CaptainCore CLI.
+
 ## [0.1.5] - 2019-04-22
 ### Added
 - Relay site commands to servers. Commands are changed to bare version. Example `site add` is sent to remote servers as `site bare-add`.
 
 ## [0.1.4] - 2019-03-18
 ### Added
-- Fleet Mode  ⛵⛵⛵ (support for mutiple captains). Tokens are now assigned to a CaptainID which grants access to just their sites. See `config.json.sample` for new token format.
-- Support for mutiple CaptainCore servers. Can specify server within config.json and list out commands which will be sent direct to that server rather then run locally.
+- Fleet Mode  ⛵⛵⛵ (support for multiple captains). Tokens are now assigned to a CaptainID which grants access to just their sites. See `config.json.sample` for new token format.
+- Support for multiple CaptainCore servers. Can specify server within config.json and list out commands which will be sent direct to that server rather then run locally.
 - A deferred command will track the origin server info. This is used to mark the origin server Job completed once the command has completed. 
 
 ## [0.1.3] - 2019-03-03
