@@ -598,8 +598,13 @@ func runCommand(cmd string, t Task) string {
 			resp, err := client.Do(req)
 			if err != nil {
 				fmt.Println(err)
+				continue
 			}
-			defer resp.Body.Close()
+			err = resp.Body.Close()
+			if err != nil {
+				log.Fatal(err)
+				continue
+			}
 
 			if debug == true {
 				body, _ := ioutil.ReadAll(resp.Body)
