@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/handlers"
@@ -97,6 +98,7 @@ type Config struct {
 type Task struct {
 	gorm.Model
 	CaptainID int
+	ProcessID int
 	Command   string
 	Status    string
 	Response  string
@@ -418,6 +420,9 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			captainID := strconv.Itoa(task.CaptainID)
 			go runCommand("captaincore "+task.Command+" --captain_id="+captainID, task)
 		}
+		if data.Action == "kill" {
+			go killCommand(task)
+		}
 		log.Println("Socket data request:", data)
 		log.Println("Executing command for client:", clients)
 
@@ -553,6 +558,12 @@ func initialMigration() {
 func isJSON(str string) bool {
 	var js json.RawMessage
 	return json.Unmarshal([]byte(str), &js) == nil
+}
+
+func killCommand(t Task) {
+	syscall.Kill(-t.ProcessID, syscall.SIGKILL)
+	syscall.Kill(t.ProcessID, syscall.SIGKILL)
+	log.Println("Process killed ", strconv.Itoa(t.ProcessID))
 }
 
 func runCommand(cmd string, t Task) string {
@@ -715,8 +726,19 @@ func runCommand(cmd string, t Task) string {
 	stdout, _ := command.StdoutPipe() // Standard out: out.String()
 	stderr, _ := command.StderrPipe() // Standard errors: stderr.String()
 
+	// Setup process group
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
 	// Run the command
 	err := command.Start()
+
+	// Grab proccess id
+	t.ProcessID = command.Process.Pid
+	db.Save(&t)
+
+	if debug == true {
+		fmt.Println("Starting command process ID " + strconv.Itoa(command.Process.Pid))
+	}
 	if err != nil {
 		log.Fatalf("cmd.Start() failed with '%s'\n", err)
 	}
@@ -737,7 +759,9 @@ func runCommand(cmd string, t Task) string {
 
 	err = command.Wait()
 	if err != nil {
-		log.Fatalf("cmd.Run() failed with %s\n", err)
+		client.conn.WriteMessage(1, []byte("Error: "+err.Error()))
+		client.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		client.conn.Close()
 	}
 
 	// Clean up websocket if found
