@@ -304,6 +304,24 @@ func newRun(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func newBackground(w http.ResponseWriter, r *http.Request) {
+	var task Task
+	json.NewDecoder(r.Body).Decode(&task)
+	token := r.Header.Get("token")
+	randomToken := generateToken()
+	captainID := fetchCaptainID(token, r)
+
+	task.Status = "Started"
+	task.CaptainID, err = strconv.Atoi(captainID)
+	task.Token = randomToken
+
+	db.Create(&task)
+
+	// Starts running CaptainCore command
+	go runCommand("captaincore "+task.Command+" --captain_id="+captainID, task)
+	fmt.Fprintf(w, "Successfully Started Task " + task.Token)
+}
+
 func newTask(w http.ResponseWriter, r *http.Request) {
 	var task Task
 	json.NewDecoder(r.Body).Decode(&task)
@@ -445,6 +463,7 @@ func handleRequests() {
 	router.HandleFunc("/tasks", checkSecurity(allTasks)).Methods("GET")
 	router.HandleFunc("/tasks/{page}", checkSecurity(allTasks)).Methods("GET")
 	router.HandleFunc("/run", checkSecurity(newRun)).Methods("POST")
+	router.HandleFunc("/run/background", checkSecurity(newBackground)).Methods("POST")
 	router.HandleFunc("/ws", wsHandler)
 
 	if config.SSLMode == "development" {
