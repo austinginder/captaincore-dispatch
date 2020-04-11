@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.0] - 2020-04-11
+### Added
+- Ability for websockets to kill running process.
+- New endpoint `run/background` for running long commands in the background.
+
 ## [0.1.6] - 2019-05-13
 ### Added
 - Realtime websockets to stream CLI output to CaptainCore GUI.
