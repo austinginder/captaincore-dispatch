@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
 	"regexp"
 	"strconv"
 	"strings"
@@ -332,11 +333,48 @@ func newTask(w http.ResponseWriter, r *http.Request) {
 	task.CaptainID, err = strconv.Atoi(captainID)
 	task.Token = randomToken
 
+	// If command contains payload="<payload>" then then write data to file and change to payload="true"
+	pattern := `(--payload='.+')`
+	payload := regexp.MustCompile(pattern).FindString(task.Command)
+
+	if len(payload) >= 1 {
+		log.Println("Payload found, writing to file.")
+		task.Command = strings.Replace(task.Command, payload, "--payload="+task.Token, -1)
+
+		pattern_data := `--payload='(.+)'`
+		payload_data := regexp.MustCompile(pattern_data).FindStringSubmatch(payload)
+
+		usr, err := user.Current()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		writeerr := WriteToFile(usr.HomeDir+"/.captaincore-cli/data/payload/"+task.Token+".txt", payload_data[1])
+		if writeerr != nil {
+			log.Fatal(writeerr)
+		}
+
+	}
+
 	db.Create(&task)
 	taskID := strconv.FormatUint(uint64(task.ID), 10)
 	response := "{ \"task_id\" : " + taskID + ", \"token\" : \"" + randomToken + "\" }"
 	fmt.Fprintf(w, response)
 
+}
+
+func WriteToFile(filename string, data string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = io.WriteString(file, data)
+	if err != nil {
+		return err
+	}
+	return file.Sync()
 }
 
 func deleteTask(w http.ResponseWriter, r *http.Request) {
