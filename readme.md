@@ -1,10 +1,10 @@
 <h1 align="center">
   <a href="https://captaincore.io"><img src="https://captaincore.io/wp-content/uploads/2018/02/main-web-icons-captain.png" width="70" /></a><br />
-CaptainCore Dispatch Server
+CaptainCore Dispatch
 
 </h1>
 
-CaptainCore Dispatch is a Golang web server part of the [CaptainCore](https://captaincore.io) toolkit. It handles communication between [CaptainCore](https://github.com/captaincore/captaincore-gui) and [CaptainCore CLI](https://github.com/captaincore/captaincore-cli).
+CaptainCore Dispatch is a Golang web server part of the [CaptainCore](https://captaincore.io) toolkit. It handles communication between the WordPress Plugin [CaptainCore](https://github.com/captaincore/captaincore) and [CaptainCore CLI](https://github.com/captaincore/captaincore-cli).
 
 [![emoji-log](https://cdn.rawgit.com/ahmadawais/stuff/ca97874/emoji-log/flat.svg)](https://github.com/ahmadawais/Emoji-Log/)
 
